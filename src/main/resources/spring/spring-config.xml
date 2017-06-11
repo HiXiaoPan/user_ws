@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+	xmlns:context="http://www.springframework.org/schema/context"
+	xmlns:jdbc="http://www.springframework.org/schema/jdbc"
+	xmlns:aop="http://www.springframework.org/schema/aop"
+	xmlns:mybatis-spring="http://mybatis.org/schema/mybatis-spring"
+	xmlns:jaxws="http://cxf.apache.org/jaxws"
+	xsi:schemaLocation="
+	   http://mybatis.org/schema/mybatis-spring
+	   http://mybatis.org/schema/mybatis-spring-1.2.xsd
+	   http://www.springframework.org/schema/aop
+	   http://www.springframework.org/schema/aop/spring-aop-4.0.xsd
+       http://www.springframework.org/schema/beans
+       http://www.springframework.org/schema/beans/spring-beans-4.0.xsd
+       http://www.springframework.org/schema/context
+       http://www.springframework.org/schema/context/spring-context-4.0.xsd
+       http://www.springframework.org/schema/jdbc 
+       http://www.springframework.org/schema/jdbc/spring-jdbc-4.0.xsd
+       http://cxf.apache.org/jaxws
+       http://cxf.apache.org/schemas/jaxws.xsd">
+
+	<context:property-placeholder location="classpath:dbConfig.properties" />
+	<!-- 这里用的 dbcp连接池，每个连接池指向一个数据库  -->
+	<bean id="dataSource1" class="org.apache.commons.dbcp.BasicDataSource">
+		<property name="driverClassName" value="${jdbc.driver}" />
+		<property name="url" value="${jdbc.url1}" />
+		<property name="username" value="${jdbc.username}" />
+		<property name="password" value="${jdbc.password}" />
+	</bean>
+	<bean id="dataSource2" class="org.apache.commons.dbcp.BasicDataSource">
+		<property name="driverClassName" value="${jdbc.driver}" />
+		<property name="url" value="${jdbc.url2}" />
+		<property name="username" value="${jdbc.username}" />
+		<property name="password" value="${jdbc.password}" />
+	</bean>
+	<!-- 配置数据库路由 -->
+	<bean id="myDataSourceRouting" class="com.atguigu.b2c.ws.utils.MyDataSourceRouting">
+		<property name="defaultTargetDataSource" ref="dataSource1"></property>
+		<property name="targetDataSources" >
+			<map key-type="java.lang.String">
+				<entry key="1" value-ref="dataSource1"></entry>
+				<entry key="2" value-ref="dataSource2"></entry>
+			</map>
+		</property>
+	</bean>
+	<bean id="sqlSessionFactoryBean" class="org.mybatis.spring.SqlSessionFactoryBean">
+		<property name="dataSource" ref="myDataSourceRouting" />
+		<property name="configLocation" value="classpath:mybatis/mybatis-config.xml" />
+		<property name="mapperLocations" value="classpath:com/atguigu/b2c/ws/mapper/*.xml"></property>
+		<property name="typeAliasesPackage" value="com.atguigu.b2c.ws.bean"></property>
+	</bean>
+	<mybatis-spring:scan base-package="com.atguigu.b2c.ws.mapper"/>
+	<!-- 这是最便利的一种。在项目上右键选择properties，然后点击java build path，在Librarys下，编辑JRE System Library，选择workspace default jre就可以了。 -->
+	<!-- 将WebService接口的实现注入进来 -->
+	<bean id="userServiceImpl" class="com.atguigu.b2c.ws.service.impl.UserServiceImpl"></bean>
+	<!-- 配置安全拦截器 -->
+	<bean id="mallSecurityCallback" class="com.atguigu.b2c.ws.utils.MallSecurityCallback"></bean>
+	<bean id="inInterceptor" class="org.apache.cxf.ws.security.wss4j.WSS4JInInterceptor">
+		<constructor-arg>
+			<map key-type="java.lang.String">
+			<!-- 拦截器对应的 key 和 value 值有规定！在org.apache.ws.security.handler.WSHandlerConstants有详细说明 -->
+			<!-- 拦截器的校验方式 -->
+				<entry key="action" value="UsernameToken"></entry>
+				<!-- 拦截器所使用的密码形态。 -->
+				<entry key="passwordType" value="PasswordText"></entry>
+				<!-- 拦截器对应的回调函数 -->
+				<entry key="passwordCallbackRef" value-ref="mallSecurityCallback"></entry>
+			</map>
+		</constructor-arg>
+	</bean>
+	<!-- 发布WebService (将需要发布的接口发布出去)-->
+	<jaxws:endpoint address="/UserService"
+		implementorClass="com.atguigu.b2c.ws.service.UserService">
+		<!-- 配置安全拦截器 -->
+		<jaxws:inInterceptors>
+			<ref bean="inInterceptor" />
+		</jaxws:inInterceptors>
+		<jaxws:implementor>
+			<!-- 需要发布出去的接口的实现 -->
+			<ref bean="userServiceImpl" />
+		</jaxws:implementor>
+	</jaxws:endpoint>
+	
+</beans>
